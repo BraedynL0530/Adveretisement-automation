@@ -2,7 +2,7 @@ feedparser==6.0.11
 requests==2.32.3
 python-dotenv==1.0.1
 ollama==0.3.3
-yt-dlp==2025.4.30
+yt-dlp==2026.02.21
 pyttsx3==2.90
 gTTS==2.5.3
 plyer==2.1.0
