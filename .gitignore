@@ -61,6 +61,10 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Advertisement-automation runtime files
+queue.db
+auth.json
+
 # Flask stuff:
 instance/
 .webassets-cache
