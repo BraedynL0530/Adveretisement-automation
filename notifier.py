@@ -88,9 +88,10 @@ def _send_notification(title: str, message: str, toast_icon: Optional[str] = Non
 def _fallback_console(title: str, message: str) -> None:
     """Print notification to console when desktop notifications aren't available."""
     border = "=" * 60
+    indented = message.replace("\n", "\n  ")
     print(f"\n{border}")
     print(f"  NOTIFICATION: {title}")
-    print(f"  {message.replace(chr(10), chr(10) + '  ')}")
+    print(f"  {indented}")
     print(f"{border}\n")
 
 

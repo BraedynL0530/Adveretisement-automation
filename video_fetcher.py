@@ -124,13 +124,13 @@ def search_recipe_videos(query: str, max_results: int = 3) -> List[Dict]:
             parts = line.split("\t", 2)
             if len(parts) >= 2:
                 url, title = parts[0].strip(), parts[1].strip()
-                duration = int(parts[2]) if len(parts) > 2 and parts[2].strip().isdigit() else 0
+                duration_seconds = int(parts[2]) if len(parts) > 2 and parts[2].strip().isdigit() else 0
                 # Filter: prefer videos between 1-15 minutes
-                if duration and (duration < 60 or duration > 900):
-                    logger.debug("Skipping video (bad duration %ds): %s", duration, title)
+                if duration_seconds and (duration_seconds < 60 or duration_seconds > 900):
+                    logger.debug("Skipping video (bad duration %ds): %s", duration_seconds, title)
                     continue
                 if url and title:
-                    videos.append({"url": url, "title": title, "duration": duration})
+                    videos.append({"url": url, "title": title, "duration": duration_seconds})
 
         logger.info("Found %d videos for query: %s", len(videos), query)
         return videos

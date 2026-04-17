@@ -64,11 +64,13 @@ def _build_email(item: Dict) -> MIMEMultipart:
     plain_text = "\n".join(plain_parts)
 
     # HTML version
-    body_html = f"<p>{body_snippet[:400].replace(chr(10), '<br>')}</p>" if body_snippet else ""
+    body_snippet_html = body_snippet[:400].replace("\n", "<br>")
+    body_html = f"<p>{body_snippet_html}</p>" if body_snippet else ""
+    suggested_reply_html = suggested_reply.replace("\n", "<br>")
     reply_html = (
         f"<h3>💬 Suggested Reply (optional)</h3>"
         f"<blockquote style='background:#f4f4f4;padding:10px;border-left:4px solid #0079d3'>"
-        f"{suggested_reply.replace(chr(10), '<br>')}"
+        f"{suggested_reply_html}"
         f"</blockquote>"
     ) if suggested_reply else ""
 

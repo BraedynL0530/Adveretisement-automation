@@ -86,6 +86,7 @@ def generate_audio_pyttsx3(script: str, output_path: Path) -> bool:
         voices = engine.getProperty("voices")
         if voices:
             if TTS_VOICE == "female":
+                # Platform-specific voice names: 'Zira' (Windows), 'Samantha' (macOS)
                 female_voices = [v for v in voices if "female" in v.name.lower()
                                   or "zira" in v.name.lower() or "samantha" in v.name.lower()]
                 if female_voices:
@@ -93,6 +94,7 @@ def generate_audio_pyttsx3(script: str, output_path: Path) -> bool:
                 elif len(voices) > 1:
                     engine.setProperty("voice", voices[1].id)
             else:
+                # Platform-specific voice names: 'David' (Windows), 'Daniel' (macOS)
                 male_voices = [v for v in voices if "male" in v.name.lower()
                                or "david" in v.name.lower() or "daniel" in v.name.lower()]
                 if male_voices:

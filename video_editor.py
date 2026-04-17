@@ -13,6 +13,7 @@ import os
 import sqlite3
 import logging
 import subprocess
+import json
 import re
 from pathlib import Path
 from typing import Optional, Dict
@@ -48,7 +49,6 @@ def _get_video_duration(video_path: Path) -> float:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        import json
         data = json.loads(result.stdout)
         return float(data.get("format", {}).get("duration", 0))
     except Exception as exc:
