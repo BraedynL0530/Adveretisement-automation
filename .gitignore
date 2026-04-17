@@ -64,6 +64,10 @@ db.sqlite3-journal
 # Advertisement-automation runtime files
 queue.db
 auth.json
+videos/
+*.aiff
+*.wav
+*.mp3
 
 # Flask stuff:
 instance/
