@@ -2,15 +2,14 @@
 runner.py - Main scheduler loop.
 
 Schedule:
-  - Every 2-4 hours: fetch RSS, filter posts, generate comments, save to queue.
-  - Every 30 minutes: check approved queue, post via Playwright, log results.
+  - Every 2 hours:  scan Reddit subreddits, email alerts on relevant matches.
+  - Every 12 hours: fetch recipe videos, auto-edit, send desktop notification.
 
 Run with:
   python runner.py
 """
 
 import os
-import random
 import time
 import logging
 from datetime import datetime
@@ -34,10 +33,9 @@ TARGET_SUBREDDITS = [
     if s.strip()
 ]
 
-# Interval ranges (seconds)
-SCRAPE_INTERVAL_MIN = int(os.getenv("SCRAPE_INTERVAL_MIN", str(2 * 3600)))   # 2 h
-SCRAPE_INTERVAL_MAX = int(os.getenv("SCRAPE_INTERVAL_MAX", str(4 * 3600)))   # 4 h
-POST_CHECK_INTERVAL = int(os.getenv("POST_CHECK_INTERVAL", str(30 * 60)))    # 30 min
+# Intervals (seconds)
+REDDIT_SCAN_INTERVAL = int(os.getenv("REDDIT_SCAN_INTERVAL", str(2 * 3600)))    # 2 h
+VIDEO_FETCH_INTERVAL = int(os.getenv("VIDEO_FETCH_INTERVAL", str(12 * 3600)))   # 12 h
 
 
 # ---------------------------------------------------------------------------
@@ -45,41 +43,52 @@ POST_CHECK_INTERVAL = int(os.getenv("POST_CHECK_INTERVAL", str(30 * 60)))    # 3
 # ---------------------------------------------------------------------------
 
 
-def run_scrape_and_generate() -> None:
-    """Fetch new posts, filter them, generate comments, and save to the queue."""
-    from scraper import fetch_all_subreddits
-    from filter import filter_posts, save_post
-    from llm import generate_comment
+def run_reddit_scan() -> None:
+    """Scan subreddits for relevant posts/comments and send email alerts."""
+    from reddit_scanner import scan_subreddits
+    from emailer import send_batch
+    from notifier import notify_reddit_match
 
-    logger.info("=== Scrape & Generate run started ===")
+    logger.info("=== Reddit scan started ===")
 
-    posts = fetch_all_subreddits(TARGET_SUBREDDITS)
-    logger.info("Total posts fetched: %d", len(posts))
+    matches = scan_subreddits(TARGET_SUBREDDITS)
+    logger.info("Relevant items found: %d", len(matches))
 
-    relevant = filter_posts(posts)
-    logger.info("Relevant new posts: %d", len(relevant))
+    if matches:
+        sent = send_batch(matches)
+        logger.info("Email notifications sent: %d/%d", sent, len(matches))
 
-    for post in relevant:
-        logger.info(
-            "Generating comment for: [%s] %s", post["subreddit"], post["title"][:60]
+        # Also fire a desktop notification for the first match
+        first = matches[0]
+        notify_reddit_match(
+            subreddit=first.get("subreddit", "?"),
+            post_title=first.get("title", ""),
         )
-        comment = generate_comment(post["subreddit"], post["title"])
-        row_id = save_post(post, comment)
-        if row_id is not None:
-            logger.info("Saved to queue with id=%d", row_id)
+
+    logger.info("=== Reddit scan finished ===")
+
+
+def run_video_pipeline() -> None:
+    """Fetch, download, edit recipe videos and notify when ready."""
+    from video_fetcher import fetch_recipe_videos
+    from video_editor import edit_video
+    from notifier import notify_video_ready
+
+    logger.info("=== Video pipeline started ===")
+
+    videos = fetch_recipe_videos(max_per_query=2, max_total=3)
+    logger.info("Videos downloaded: %d", len(videos))
+
+    for video in videos:
+        logger.info("Editing: %s", video["title"])
+        final_path = edit_video(video)
+        if final_path:
+            notify_video_ready(final_path, dish_name=video["title"])
+            logger.info("Video ready: %s", final_path)
         else:
-            logger.debug("Post already in queue, skipped.")
+            logger.warning("Editing failed for: %s", video["title"])
 
-    logger.info("=== Scrape & Generate run finished ===")
-
-
-def run_post_approved() -> None:
-    """Post all approved comments, respecting the daily rate limit."""
-    from poster import run_posting_queue
-
-    logger.info("=== Posting run started ===")
-    run_posting_queue()
-    logger.info("=== Posting run finished ===")
+    logger.info("=== Video pipeline finished ===")
 
 
 # ---------------------------------------------------------------------------
@@ -88,48 +97,51 @@ def run_post_approved() -> None:
 
 
 def main() -> None:
-    logger.info("Reddit Ad Automation runner starting up.")
+    logger.info("NutriFitness Automation runner starting up.")
     logger.info("Target subreddits: %s", ", ".join(TARGET_SUBREDDITS))
 
     # Initialise the database on first run
-    from filter import init_db
+    from reddit_scanner import init_db
     init_db()
 
-    next_scrape = time.monotonic()          # run immediately on first iteration
-    next_post_check = time.monotonic()      # run immediately on first iteration
+    # Run both tasks immediately on startup, then on schedule
+    next_reddit_scan = time.monotonic()
+    next_video_fetch = time.monotonic()
 
     while True:
         now = time.monotonic()
 
-        if now >= next_scrape:
+        if now >= next_reddit_scan:
             try:
-                run_scrape_and_generate()
+                run_reddit_scan()
             except Exception as exc:
-                logger.error("Scrape/generate cycle failed: %s", exc)
+                logger.error("Reddit scan cycle failed: %s", exc, exc_info=True)
 
-            interval = random.randint(SCRAPE_INTERVAL_MIN, SCRAPE_INTERVAL_MAX)
-            next_scrape = time.monotonic() + interval
+            next_reddit_scan = time.monotonic() + REDDIT_SCAN_INTERVAL
             logger.info(
-                "Next scrape in %d min (≈ %s)",
-                interval // 60,
-                datetime.fromtimestamp(time.time() + interval).strftime("%H:%M"),
+                "Next Reddit scan in %d min (≈ %s)",
+                REDDIT_SCAN_INTERVAL // 60,
+                datetime.fromtimestamp(time.time() + REDDIT_SCAN_INTERVAL).strftime("%H:%M"),
             )
 
-        if now >= next_post_check:
+        if now >= next_video_fetch:
             try:
-                run_post_approved()
+                run_video_pipeline()
             except Exception as exc:
-                logger.error("Posting cycle failed: %s", exc)
+                logger.error("Video pipeline cycle failed: %s", exc, exc_info=True)
 
-            next_post_check = time.monotonic() + POST_CHECK_INTERVAL
+            next_video_fetch = time.monotonic() + VIDEO_FETCH_INTERVAL
             logger.info(
-                "Next posting check in %d min",
-                POST_CHECK_INTERVAL // 60,
+                "Next video fetch in %d h (≈ %s)",
+                VIDEO_FETCH_INTERVAL // 3600,
+                datetime.fromtimestamp(time.time() + VIDEO_FETCH_INTERVAL).strftime("%H:%M"),
             )
 
-        # Sleep until the next event is due
-        sleep_secs = min(next_scrape - time.monotonic(),
-                         next_post_check - time.monotonic())
+        # Sleep until the next scheduled event
+        sleep_secs = min(
+            next_reddit_scan - time.monotonic(),
+            next_video_fetch - time.monotonic(),
+        )
         sleep_secs = max(sleep_secs, 1)
         logger.debug("Sleeping for %.0f seconds...", sleep_secs)
         time.sleep(sleep_secs)
